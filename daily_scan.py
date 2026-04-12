@@ -15,10 +15,11 @@ import screener
 
 def send_whatsapp(phone: str, api_key: str, message: str) -> None:
     """שליחת הודעת וואטסאפ דרך CallMeBot (חינמי)."""
-    encoded = urllib.parse.quote(message)
+    # encode safely — safe='' encodes everything including emojis
+    encoded = urllib.parse.quote(message, safe="")
     url = f"https://api.callmebot.com/whatsapp.php?phone={phone}&text={encoded}&apikey={api_key}"
     try:
-        with urllib.request.urlopen(url, timeout=10) as resp:
+        with urllib.request.urlopen(url, timeout=15) as resp:
             print(f"WhatsApp sent: {resp.status}")
     except Exception as e:
         print(f"WhatsApp error: {e}")
@@ -51,22 +52,32 @@ def main() -> None:
     # ── סריקת שורט ──
     short_tickers = run_scan("🔻 שורטים",     mode="short")
 
-    # ── בניית הודעה ──
-    lines = ["🕯️ *Benja · LPS Scanner — Daily Report*\n"]
+    # ── בניית הודעה — מקוצרת ל-30 טיקרים לכל היותר ──
+    MAX_SHOW = 30
 
-    if long_tickers or cap_tickers:
-        combined = sorted(set(long_tickers + cap_tickers))
-        lines.append(f"📈 *LPS (Long)*: {', '.join(combined) if combined else 'None'}")
-    else:
-        lines.append("📈 *LPS (Long)*: None")
+    combined_long  = sorted(set(long_tickers + cap_tickers))
+    combined_short = sorted(short_tickers)
 
-    if short_tickers:
-        lines.append(f"📉 *LPSy (Short)*: {', '.join(sorted(short_tickers))}")
-    else:
-        lines.append("📉 *LPSy (Short)*: None")
+    def fmt(tickers: list[str]) -> str:
+        if not tickers:
+            return "None"
+        shown = tickers[:MAX_SHOW]
+        extra = len(tickers) - len(shown)
+        s = ", ".join(shown)
+        if extra > 0:
+            s += f" (+{extra} more)"
+        return s
 
     total = len(set(long_tickers + cap_tickers + short_tickers))
-    lines.append(f"\n✅ Total setups: {total}")
+
+    lines = [
+        "*Benja - LPS Scanner*",
+        "",
+        f"LPS Long ({len(combined_long)}): {fmt(combined_long)}",
+        f"LPSy Short ({len(combined_short)}): {fmt(combined_short)}",
+        "",
+        f"Total setups: {total}",
+    ]
 
     message = "\n".join(lines)
     print(message)
