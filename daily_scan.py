@@ -5,8 +5,7 @@ daily_scan.py — סריקת LPS יומית ושליחת תוצאות לוואט
 from __future__ import annotations
 
 import os
-import urllib.parse
-import urllib.request
+import requests
 
 import config
 import analyzer
@@ -15,12 +14,13 @@ import screener
 
 def send_whatsapp(phone: str, api_key: str, message: str) -> None:
     """שליחת הודעת וואטסאפ דרך CallMeBot (חינמי)."""
-    # encode safely — safe='' encodes everything including emojis
-    encoded = urllib.parse.quote(message, safe="")
-    url = f"https://api.callmebot.com/whatsapp.php?phone={phone}&text={encoded}&apikey={api_key}"
     try:
-        with urllib.request.urlopen(url, timeout=15) as resp:
-            print(f"WhatsApp sent: {resp.status}")
+        resp = requests.get(
+            "https://api.callmebot.com/whatsapp.php",
+            params={"phone": phone, "text": message, "apikey": api_key},
+            timeout=15,
+        )
+        print(f"WhatsApp sent: {resp.status_code} — {resp.text[:100]}")
     except Exception as e:
         print(f"WhatsApp error: {e}")
 
