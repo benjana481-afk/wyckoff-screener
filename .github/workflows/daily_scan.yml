@@ -1,0 +1,31 @@
+name: Daily LPS Scan
+
+on:
+  schedule:
+    # 05:00 UTC = 08:00 ישראל (UTC+3) — ימי מסחר בלבד
+    - cron: "0 5 * * 1-5"
+  workflow_dispatch:   # מאפשר הפעלה ידנית מ-GitHub
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run LPS scan & notify WhatsApp
+        env:
+          CALLMEBOT_PHONE:  ${{ secrets.CALLMEBOT_PHONE }}
+          CALLMEBOT_APIKEY: ${{ secrets.CALLMEBOT_APIKEY }}
+        run: python daily_scan.py
