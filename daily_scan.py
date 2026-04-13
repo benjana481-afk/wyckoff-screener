@@ -1,5 +1,5 @@
 """
-daily_scan.py — סריקת LPS יומית ושליחת תוצאות לוואטסאפ דרך CallMeBot.
+daily_scan.py — סריקת LPS יומית ושליחת תוצאות לטלגרם.
 רץ ב-GitHub Actions כל יום לפני פתיחת שוק (08:00 ישראל).
 """
 from __future__ import annotations
@@ -12,17 +12,17 @@ import analyzer
 import screener
 
 
-def send_whatsapp(phone: str, api_key: str, message: str) -> None:
-    """שליחת הודעת וואטסאפ דרך CallMeBot (חינמי)."""
+def send_telegram(token: str, chat_id: str, message: str) -> None:
+    """שליחת הודעה לטלגרם."""
     try:
-        resp = requests.get(
-            "https://api.callmebot.com/whatsapp.php",
-            params={"phone": phone, "text": message, "apikey": api_key},
+        resp = requests.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={"chat_id": chat_id, "text": message, "parse_mode": "Markdown"},
             timeout=15,
         )
-        print(f"WhatsApp sent: {resp.status_code} — {resp.text[:100]}")
+        print(f"Telegram sent: {resp.status_code} — {resp.text[:100]}")
     except Exception as e:
-        print(f"WhatsApp error: {e}")
+        print(f"Telegram error: {e}")
 
 
 def run_scan(preset_name: str, mode: str) -> list[str]:
@@ -43,16 +43,15 @@ def run_scan(preset_name: str, mode: str) -> list[str]:
 
 
 def main() -> None:
-    phone   = os.environ["CALLMEBOT_PHONE"]
-    api_key = os.environ["CALLMEBOT_APIKEY"]
+    token   = os.environ["TELEGRAM_TOKEN"]
+    chat_id = os.environ["TELEGRAM_CHAT_ID"]
 
-    # ── סריקת לונג ──
+    # ── סריקות ──
     long_tickers  = run_scan("📈 גבוה שנתי", mode="long")
     cap_tickers   = run_scan("💰 Market Cap",  mode="long")
-    # ── סריקת שורט ──
     short_tickers = run_scan("🔻 שורטים",     mode="short")
 
-    # ── בניית הודעה — מקוצרת ל-30 טיקרים לכל היותר ──
+    # ── בניית הודעה ──
     MAX_SHOW = 30
 
     combined_long  = sorted(set(long_tickers + cap_tickers))
@@ -70,18 +69,17 @@ def main() -> None:
 
     total = len(set(long_tickers + cap_tickers + short_tickers))
 
-    lines = [
-        "*Benja - LPS Scanner*",
-        "",
-        f"LPS Long ({len(combined_long)}): {fmt(combined_long)}",
-        f"LPSy Short ({len(combined_short)}): {fmt(combined_short)}",
-        "",
-        f"Total setups: {total}",
-    ]
+    message = (
+        "*Benja · LPS Scanner*\n"
+        "\n"
+        f"📈 LPS Long ({len(combined_long)}): {fmt(combined_long)}\n"
+        f"📉 LPSy Short ({len(combined_short)}): {fmt(combined_short)}\n"
+        "\n"
+        f"✅ Total setups: {total}"
+    )
 
-    message = "\n".join(lines)
     print(message)
-    send_whatsapp(phone, api_key, message)
+    send_telegram(token, chat_id, message)
 
 
 if __name__ == "__main__":
