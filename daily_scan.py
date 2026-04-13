@@ -29,7 +29,7 @@ def run_scan(preset_name: str, mode: str) -> list[str]:
     """מריץ סריקה על פרסט נתון ומחזיר רשימת טיקרים."""
     filters = config.PRESETS[preset_name]
     try:
-        tickers = screener.get_tickers(filters, limit=500)
+        tickers = screener.get_tickers(filters)   # ללא limit — כל מה שפינביז מחזיר
     except screener.ScreenerError as e:
         print(f"Finviz error for {preset_name}: {e}")
         return []
@@ -42,21 +42,27 @@ def run_scan(preset_name: str, mode: str) -> list[str]:
     return found
 
 
+def _send_long(token: str, chat_id: str, message: str) -> None:
+    """שולח הודעה — מפצל אוטומטית אם עולה על 4096 תווים."""
+    MAX_LEN = 4096
+    while message:
+        send_telegram(token, chat_id, message[:MAX_LEN])
+        message = message[MAX_LEN:]
+
+
 def main() -> None:
     token   = os.environ["TELEGRAM_TOKEN"]
     chat_id = os.environ["TELEGRAM_CHAT_ID"]
 
-    # ── סריקות ──
-    long_tickers  = run_scan("📈 גבוה שנתי", mode="long")
-    cap_tickers   = run_scan("💰 Market Cap",  mode="long")
-    short_tickers = run_scan("🔻 שורטים",     mode="short")
+    # ── סריקות — כל פרסט בנפרד ──
+    annual_tickers = run_scan("📈 גבוה שנתי", mode="long")
+    cap_tickers    = run_scan("💰 Market Cap",  mode="long")
+    short_tickers  = run_scan("🔻 שורטים",     mode="short")
 
-    # ── בניית הודעה ──
-    combined_long  = sorted(set(long_tickers + cap_tickers))
-    combined_short = sorted(short_tickers)
-    total = len(set(long_tickers + cap_tickers + short_tickers))
+    total = len(set(annual_tickers + cap_tickers + short_tickers))
 
     def fmt_section(label: str, tickers: list[str]) -> str:
+        tickers = sorted(tickers)
         count = len(tickers)
         if count == 0:
             return f"{label} — 0 מניות: None"
@@ -65,28 +71,17 @@ def main() -> None:
     message = (
         "*Benja · LPS Scanner*\n"
         "\n"
-        f"{fmt_section('📈 LPS Long', combined_long)}\n"
+        f"{fmt_section('📈 גבוה שנתי', annual_tickers)}\n"
         "\n"
-        f"{fmt_section('📉 LPSy Short', combined_short)}\n"
+        f"{fmt_section('💰 Market Cap', cap_tickers)}\n"
+        "\n"
+        f"{fmt_section('🔻 LPSy Short', short_tickers)}\n"
         "\n"
         f"✅ Total setups: {total}"
     )
 
-    # Telegram מגביל הודעה ל-4096 תווים — חלק אם צריך
-    MAX_LEN = 4096
-    if len(message) > MAX_LEN:
-        chunks = []
-        while message:
-            chunks.append(message[:MAX_LEN])
-            message = message[MAX_LEN:]
-        for chunk in chunks:
-            send_telegram(token, chat_id, chunk)
-        print(message[:200] + "...")
-        return
-
-
     print(message)
-    send_telegram(token, chat_id, message)
+    _send_long(token, chat_id, message)
 
 
 if __name__ == "__main__":
