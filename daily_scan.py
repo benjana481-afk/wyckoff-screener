@@ -52,31 +52,38 @@ def main() -> None:
     short_tickers = run_scan("🔻 שורטים",     mode="short")
 
     # ── בניית הודעה ──
-    MAX_SHOW = 30
-
     combined_long  = sorted(set(long_tickers + cap_tickers))
     combined_short = sorted(short_tickers)
-
-    def fmt(tickers: list[str]) -> str:
-        if not tickers:
-            return "None"
-        shown = tickers[:MAX_SHOW]
-        extra = len(tickers) - len(shown)
-        s = ", ".join(shown)
-        if extra > 0:
-            s += f" (+{extra} more)"
-        return s
-
     total = len(set(long_tickers + cap_tickers + short_tickers))
+
+    def fmt_section(label: str, tickers: list[str]) -> str:
+        count = len(tickers)
+        if count == 0:
+            return f"{label} — 0 מניות: None"
+        return f"{label} — {count} מניות:\n{', '.join(tickers)}"
 
     message = (
         "*Benja · LPS Scanner*\n"
         "\n"
-        f"📈 LPS Long ({len(combined_long)}): {fmt(combined_long)}\n"
-        f"📉 LPSy Short ({len(combined_short)}): {fmt(combined_short)}\n"
+        f"{fmt_section('📈 LPS Long', combined_long)}\n"
+        "\n"
+        f"{fmt_section('📉 LPSy Short', combined_short)}\n"
         "\n"
         f"✅ Total setups: {total}"
     )
+
+    # Telegram מגביל הודעה ל-4096 תווים — חלק אם צריך
+    MAX_LEN = 4096
+    if len(message) > MAX_LEN:
+        chunks = []
+        while message:
+            chunks.append(message[:MAX_LEN])
+            message = message[MAX_LEN:]
+        for chunk in chunks:
+            send_telegram(token, chat_id, chunk)
+        print(message[:200] + "...")
+        return
+
 
     print(message)
     send_telegram(token, chat_id, message)
