@@ -2,8 +2,8 @@ name: Daily LPS Scan
 
 on:
   schedule:
-    # 22:00 UTC = 01:00 ישראל (UTC+3) — ימי מסחר בלבד (א'-ה' לפנות בוקר)
-    - cron: "0 22 * * 0-4"
+    # 22:00 UTC = 01:00 ישראל (UTC+3) — א'-ו' לפנות בוקר (כולל שישי בלילה)
+    - cron: "0 22 * * 0-5"
   workflow_dispatch:   # מאפשר הפעלה ידנית מ-GitHub
 
 jobs:
