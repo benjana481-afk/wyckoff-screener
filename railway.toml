@@ -1,0 +1,7 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+cronSchedule = "0 5 * * 1-5"
+startCommand = "python daily_scan.py"
+restartPolicyType = "never"
