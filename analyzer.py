@@ -114,7 +114,19 @@ def analyze(ticker: str, mode: str = "long") -> WyckoffResult:
 
         lps_start_pos = end_pos - count + 1
 
-        # ---- 4. בדיקת כיוון ----
+        # ---- 4. בדיקת spike בנר בודד ----
+        # אף נר בסדרה לא יזוז יותר מ-MAX_SINGLE_SPIKE (1.5%) בין open ל-close
+        has_spike = False
+        for i in range(lps_start_pos, end_pos + 1):
+            row = df.iloc[i]
+            single_move = abs(float(row["Close"]) - float(row["Open"])) / float(row["Open"])
+            if single_move > config.MAX_SINGLE_SPIKE:
+                has_spike = True
+                break
+        if has_spike:
+            continue
+
+        # ---- 5. בדיקת כיוון ----
         open_first = float(df.iloc[lps_start_pos]["Open"])
         close_last = float(df.iloc[end_pos]["Close"])
 
