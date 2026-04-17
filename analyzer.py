@@ -90,6 +90,13 @@ def analyze(ticker: str, mode: str = "long") -> WyckoffResult:
         return WyckoffResult(ticker=ticker, detected=False, error="Not enough data after rolling calc")
 
     current_price = float(df["Close"].iloc[-1])
+
+    # ---- בדיקת תנודתיות מינימלית ----
+    # מניות "קפואות" (avg body < 0.5% מהמחיר) — לא רלוונטיות ל-LPS
+    latest_avg_body = float(df["avg_body"].iloc[-1])
+    if current_price > 0 and (latest_avg_body / current_price) < config.MIN_AVG_BODY_PCT:
+        return WyckoffResult(ticker=ticker, detected=False, error="Insufficient volatility (frozen stock)")
+
     total_rows = len(df)
 
     # ---- 3. חיפוש LPS ----

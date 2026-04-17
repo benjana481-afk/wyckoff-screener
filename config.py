@@ -41,6 +41,7 @@ PULLBACK_BODY_THRESHOLD: float = 1.0   # גוף נר < ממוצע (body below av
 PULLBACK_RECENCY: int = 3         # ה-LPS חייב להסתיים ב-3 ימים האחרונים
 LPS_DIRECTION_TOLERANCE: float = 0.02  # מאפשר עד +2% עליה כוללת בסדרה (Wyckoff consolidation)
 MAX_SINGLE_SPIKE: float = 0.015       # נר בודד לא יזוז יותר מ-1.5% (open vs close)
+MIN_AVG_BODY_PCT: float = 0.005      # ממוצע גוף חייב להיות לפחות 0.5% מהמחיר — מסנן מניות "קפואות"
 
 # מקסימום מניות לסריקה
 MAX_TICKERS: int = 2000
