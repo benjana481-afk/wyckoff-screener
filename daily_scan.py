@@ -51,9 +51,8 @@ def _send_long(token: str, chat_id: str, message: str) -> None:
 
 
 def main() -> None:
-    token   = os.environ["TELEGRAM_TOKEN"]
-    chat_id = os.environ["TELEGRAM_CHAT_ID"]
-    print(f"DEBUG token[:20]: {token[:20]} | chat_id: '{chat_id}' | len(token)={len(token)}")
+    token   = os.environ["TELEGRAM_TOKEN"].strip()
+    chat_id = os.environ["TELEGRAM_CHAT_ID"].strip()
 
     # ── סריקות — כל פרסט בנפרד ──
     annual_tickers = run_scan("📈 גבוה שנתי", mode="long")
