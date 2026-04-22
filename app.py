@@ -1,9 +1,8 @@
 """
-app.py — LPS Scanner (Last Point of Support) — Wyckoff Method
+app.py — Long Trade Checklist Scanner — Wyckoff Method
 """
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import streamlit as st
@@ -11,7 +10,7 @@ import streamlit as st
 import analyzer
 import config
 import screener
-from analyzer import WyckoffResult
+from analyzer import ChecklistResult, SpyAnalysis
 
 # ─────────────────────────────────────────────
 #  Page config
@@ -33,12 +32,10 @@ html, body, [class*="css"] {
     font-family: 'Inter', sans-serif;
 }
 
-/* ── Background ── */
 .stApp {
     background: #FAF8F5;
 }
 
-/* ── Sidebar ── */
 [data-testid="stSidebar"] {
     background: #FFFFFF !important;
     border-right: 1px solid #EDE8E0;
@@ -55,7 +52,6 @@ html, body, [class*="css"] {
     color: #444 !important;
 }
 
-/* ── Preset buttons ── */
 div[data-testid="stHorizontalBlock"] .stButton > button {
     background: #F5F1EB;
     border: 1px solid #DDD5C8;
@@ -77,7 +73,6 @@ div[data-testid="stHorizontalBlock"] .stButton > button[kind="primary"] {
     font-weight: 600;
 }
 
-/* ── Run Scan button ── */
 div[data-testid="stSidebar"] .stButton > button[kind="primary"] {
     background: #F97316 !important;
     color: #FFFFFF !important;
@@ -92,7 +87,6 @@ div[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {
     box-shadow: 0 4px 16px rgba(249,115,22,0.5);
 }
 
-/* ── Metrics ── */
 [data-testid="stMetric"] {
     background: #FFFFFF;
     border: 1px solid #EDE8E0;
@@ -112,10 +106,8 @@ div[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {
     font-weight: 700;
 }
 
-/* ── Divider ── */
 hr { border-color: #EDE8E0 !important; }
 
-/* ── Expander ── */
 [data-testid="stExpander"] {
     background: #FFFFFF;
     border: 1px solid #EDE8E0 !important;
@@ -127,14 +119,12 @@ hr { border-color: #EDE8E0 !important; }
     font-weight: 500;
 }
 
-/* ── Dataframe ── */
 [data-testid="stDataFrame"] {
     border-radius: 8px;
     overflow: hidden;
     border: 1px solid #EDE8E0;
 }
 
-/* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: #FAF8F5; }
 ::-webkit-scrollbar-thumb { background: #DDD5C8; border-radius: 3px; }
@@ -143,7 +133,7 @@ hr { border-color: #EDE8E0 !important; }
 
 
 # ─────────────────────────────────────────────
-#  Header — Benja logo
+#  Header
 # ─────────────────────────────────────────────
 st.markdown("""
 <div style="
@@ -182,7 +172,7 @@ st.markdown("""
         text-transform: uppercase;
         align-self: flex-end;
         padding-bottom: 0.2rem;
-    ">LPS Scanner</div>
+    ">Long Trade Checklist Scanner</div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -210,6 +200,21 @@ with st.sidebar:
     active_preset = st.session_state["preset"]
     active_filters = config.PRESETS[active_preset]
 
+    st.markdown("**LPS Direction**")
+    if "lps_mode" not in st.session_state:
+        st.session_state["lps_mode"] = "+"
+    lps_col1, lps_col2 = st.columns(2)
+    with lps_col1:
+        if st.button("LPS +", use_container_width=True,
+                     type="primary" if st.session_state["lps_mode"] == "+" else "secondary"):
+            st.session_state["lps_mode"] = "+"
+            st.rerun()
+    with lps_col2:
+        if st.button("LPS −", use_container_width=True,
+                     type="primary" if st.session_state["lps_mode"] == "-" else "secondary"):
+            st.session_state["lps_mode"] = "-"
+            st.rerun()
+
     with st.expander("Active Filters", expanded=False):
         for k, v in active_filters.items():
             st.markdown(f"<small style='color:#AAA'>{k}</small><br>"
@@ -221,17 +226,17 @@ with st.sidebar:
     st.markdown("### ⚙️ LPS Settings")
 
     pb_min, pb_max = st.slider(
-        "Pullback Days",
+        "Pullback Days (Daily LPS)",
         min_value=2, max_value=10,
         value=(config.PULLBACK_MIN_DAYS, config.PULLBACK_MAX_DAYS),
-        help="Number of consecutive days in the LPS window",
+        help="מספר ימים רצופים של חולשה ביומי",
     )
 
     max_tickers = st.slider(
         "Tickers to Scan",
         min_value=100, max_value=config.MAX_TICKERS,
         value=2000, step=100,
-        help="More tickers = longer scan time (~1 sec per ticker)",
+        help="יותר טיקרים = זמן סריקה ארוך יותר",
     )
 
     st.divider()
@@ -239,19 +244,100 @@ with st.sidebar:
 
 
 # ─────────────────────────────────────────────
+#  Helpers
+# ─────────────────────────────────────────────
+
+def _risk_badge(spy: SpyAnalysis, scan_mode: str) -> str:
+    """מחשב תווית רמת סיכון לפי מצב SPY."""
+    if scan_mode == "short":
+        return ""
+    if spy.phase_b_reversal:
+        return "🟢 סיכון שלם"
+    if spy.lps_sellers_weakness:
+        return "🟡 חצי סיכון"
+    return "🔴 רבע סיכון"
+
+
+def _risk_color(spy: SpyAnalysis, scan_mode: str) -> str:
+    if scan_mode == "short":
+        return "#F97316"
+    if spy.phase_b_reversal:
+        return "#16A34A"
+    if spy.lps_sellers_weakness:
+        return "#CA8A04"
+    return "#DC2626"
+
+
+def _checklist_html(r: ChecklistResult) -> str:
+    """HTML של 4 פריטי הצ'קליסט + תזמון."""
+    def item(ok: bool, label: str, detail: str = "") -> str:
+        icon = "✅" if ok else "⬜"
+        color = "#16A34A" if ok else "#AAA"
+        det = f"<span style='color:#999; font-size:0.75rem; margin-right:0.4rem'>{detail}</span>" if detail else ""
+        return (
+            f"<div style='display:flex; align-items:baseline; gap:0.4rem; margin:0.15rem 0;'>"
+            f"{det}"
+            f"<span style='color:{color}; font-size:0.82rem'>{icon} {label}</span>"
+            f"</div>"
+        )
+
+    entry_label = ""
+    if r.entry_mode == "breakout":
+        entry_label = "📈 פריצת גבוה"
+    elif r.entry_mode == "spring":
+        entry_label = "🔄 Spring + חזרה"
+
+    months_txt = f"{r.monthly_lps_months}m" if r.monthly_lps_months else ""
+    days_txt = f"{r.daily_accum_days}d" if r.daily_accum_days else ""
+    lps_txt = f"{r.lps_days}d / {abs(r.total_decline_pct or 0):.1f}%" if r.lps_days else ""
+    entry_txt = entry_label if entry_label else ("⬜ ממתין לכניסה" if r.daily_lps_ok else "")
+
+    html = (
+        f"<div style='background:#FAFAF8; border-radius:6px; padding:0.6rem 0.8rem;"
+        f"border:1px solid #EDE8E0; font-family:Inter,sans-serif;'>"
+        + item(r.monthly_lps_ok, f"LPS חודשי", months_txt)
+        + item(r.monthly_phase_de, "פאזה D-E (חודשי)")
+        + item(r.daily_mini_accum_ok, "מיני-איסוף יומי (2+ חודשים)", days_txt)
+        + item(r.daily_lps_ok, "LPS יומי — חולשת מוכרים", lps_txt)
+        + (f"<div style='margin-top:0.4rem; padding-top:0.4rem; border-top:1px solid #EDE8E0;"
+           f"color:#F97316; font-size:0.82rem; font-weight:600;'>{entry_txt}</div>"
+           if entry_txt else "")
+        + "</div>"
+    )
+    return html
+
+
+def _score_color(score: int) -> str:
+    if score >= 4:
+        return "#16A34A"
+    if score >= 3:
+        return "#CA8A04"
+    if score >= 2:
+        return "#F97316"
+    return "#DC2626"
+
+
+# ─────────────────────────────────────────────
 #  Scan logic
 # ─────────────────────────────────────────────
-def _apply_thresholds(pb_min: int, pb_max: int) -> None:
+if run_btn:
     config.PULLBACK_MIN_DAYS = pb_min
     config.PULLBACK_MAX_DAYS = pb_max
 
+    scan_mode = "long" if st.session_state["lps_mode"] == "+" else "short"
+    pattern_name = "LPS+" if scan_mode == "long" else "LPS-"
 
-if run_btn:
-    _apply_thresholds(pb_min, pb_max)
+    # ── ניתוח SPY (פעם אחת בלבד) ──
+    spy_analysis: SpyAnalysis
+    if scan_mode == "long":
+        with st.spinner("Analyzing SPY market conditions..."):
+            spy_analysis = analyzer.analyze_spy()
+        st.session_state["spy_analysis"] = spy_analysis
+    else:
+        spy_analysis = SpyAnalysis()
+        st.session_state["spy_analysis"] = spy_analysis
 
-    scan_mode = "short" if active_preset == "🔻 שורטים" else "long"
-    pattern_name = "LPSy" if scan_mode == "short" else "LPS"
-
+    # ── שליפת טיקרים מ-Finviz ──
     with st.spinner("Fetching tickers from Finviz..."):
         try:
             tickers = screener.get_tickers(active_filters, limit=max_tickers)
@@ -259,17 +345,17 @@ if run_btn:
             st.error(f"Finviz error: {e}")
             st.stop()
 
-    st.info(f"Found **{len(tickers)}** tickers in preset **{active_preset}** — running {pattern_name} analysis...")
+    st.info(f"Found **{len(tickers)}** tickers — running full checklist analysis...")
 
     progress_bar = st.progress(0.0)
     status_text = st.empty()
-    results: list[WyckoffResult] = []
+    results: list[ChecklistResult] = []
     errors: list[str] = []
 
-    for i, (ticker, name) in enumerate(tickers):
+    for i, (ticker, _) in enumerate(tickers):
         status_text.text(f"Analyzing {ticker}  ({i + 1} / {len(tickers)})")
         result = analyzer.analyze(ticker, mode=scan_mode)
-        if result.error:
+        if result.error and "volatility" not in result.error and "Insufficient data" not in result.error:
             errors.append(f"{ticker}: {result.error}")
         elif result.detected:
             results.append(result)
@@ -278,7 +364,7 @@ if run_btn:
     progress_bar.empty()
     status_text.empty()
 
-    # ---- רשימה מצטברת ----
+    # ── רשימה מצטברת ──
     new_tickers = {r.ticker for r in results}
     existing_list: list[str] = st.session_state.get("ticker_list", [])
     existing_set = set(existing_list)
@@ -302,14 +388,67 @@ if run_btn:
 # ─────────────────────────────────────────────
 #  Results
 # ─────────────────────────────────────────────
-results: list[WyckoffResult] = st.session_state.get("results", [])
+results: list[ChecklistResult] = st.session_state.get("results", [])
 scan_info: dict = st.session_state.get("scan_info", {})
+spy_analysis: SpyAnalysis = st.session_state.get("spy_analysis", SpyAnalysis())
 
+# ── SPY Risk Banner ──
+if scan_info and scan_info.get("scan_mode") == "long":
+    risk_badge = _risk_badge(spy_analysis, "long")
+    risk_color = _risk_color(spy_analysis, "long")
+
+    spy_detail_parts = [f"RSI {spy_analysis.rsi_daily}"]
+    if spy_analysis.phase_b_reversal:
+        spy_detail_parts.append("היפוך בתמיכה (פאזה B)")
+    elif spy_analysis.lps_sellers_weakness:
+        spy_detail_parts.append("LPS — חולשת מוכרים")
+    else:
+        spy_detail_parts.append("SPY לא במצב אידיאלי")
+    if spy_analysis.monthly_lps_ok:
+        spy_detail_parts.append("LPS חודשי ✓")
+
+    spy_detail = " · ".join(spy_detail_parts)
+
+    st.markdown(f"""
+    <div style="
+        background: #FFFFFF;
+        border: 1px solid #EDE8E0;
+        border-left: 4px solid {risk_color};
+        border-radius: 8px;
+        padding: 0.9rem 1.3rem;
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    ">
+        <div>
+            <div style="font-size:0.68rem; color:#AAA; letter-spacing:0.1em;
+                        text-transform:uppercase; margin-bottom:0.2rem;">
+                SPY Market Conditions
+            </div>
+            <div style="font-size:1.1rem; font-weight:700; color:{risk_color};">
+                {risk_badge}
+            </div>
+        </div>
+        <div style="margin-left:auto; font-size:0.82rem; color:#777;">
+            {spy_detail}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# ── Metrics ──
 if scan_info:
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     col1.metric("Tickers Scanned", scan_info.get("total", 0))
-    col2.metric("LPS Setups Found", scan_info.get("detected", 0))
-    col3.metric("Errors", len(scan_info.get("errors", [])))
+    col2.metric("Setups Found", scan_info.get("detected", 0))
+
+    if results:
+        with_entry = sum(1 for r in results if r.entry_mode)
+        col3.metric("Entry Today", with_entry)
+    else:
+        col3.metric("Entry Today", 0)
+
+    col4.metric("Errors", len(scan_info.get("errors", [])))
 
     if scan_info.get("errors"):
         with st.expander(f"Errors ({len(scan_info['errors'])})"):
@@ -333,7 +472,7 @@ if ticker_list:
         ">
             <div style="color:#F97316; font-size:0.72rem; font-weight:700;
                         letter-spacing:0.12em; margin-bottom:0.4rem; text-transform:uppercase;">
-                📋 Accumulated List ({len(ticker_list)} tickers)
+                Accumulated List ({len(ticker_list)} tickers)
             </div>
             <div style="color:#333; font-size:0.92rem; line-height:1.8;
                         word-break:break-word; font-family:monospace;">
@@ -346,6 +485,7 @@ if ticker_list:
             st.session_state["ticker_list"] = []
             st.rerun()
 
+# ── Empty state ──
 if not results and scan_info:
     st.markdown("""
     <div style="text-align:center; padding:3rem; color:#CCC;">
@@ -356,9 +496,8 @@ if not results and scan_info:
     """, unsafe_allow_html=True)
 
 elif results:
-    pname = scan_info.get("pattern_name", "LPS")
     smode = scan_info.get("scan_mode", "long")
-    # לונג = ירוק, שורט = אדום
+    pname = scan_info.get("pattern_name", "LPS")
     accent = "#16A34A" if smode == "long" else "#DC2626"
     accent_bg = "#F0FDF4" if smode == "long" else "#FEF2F2"
 
@@ -372,7 +511,7 @@ elif results:
         margin-bottom: 1.5rem;
     ">
         <span style="color:{accent}; font-weight:700; font-size:1rem;">
-            {'📈' if smode == 'long' else '📉'} {len(results)} {pname} Setup{'s' if len(results) != 1 else ''} Found
+            {'📈' if smode == 'long' else '📉'} {len(results)} Setup{'s' if len(results) != 1 else ''} Found
         </span>
         <span style="color:#999; font-size:0.85rem; margin-left:0.8rem;">
             Preset: {scan_info.get('preset', '')}
@@ -383,42 +522,55 @@ elif results:
     # ── Summary table ──
     pct_label = "Rise %" if pname == "LPSy" else "Decline %"
     table_data = {
-        "Ticker":           [r.ticker for r in results],
-        f"{pname} Start":   [r.lps_start_date for r in results],
-        f"{pname} End":     [r.lps_end_date for r in results],
-        "Days":             [r.lps_days for r in results],
-        pct_label:          [f"{abs(r.total_decline_pct)}%" for r in results],
-        "Volume":           [r.volume_trend for r in results],
-        "Price ($)":        [r.current_price for r in results],
+        "Ticker":          [r.ticker for r in results],
+        "Score":           [f"{r.checklist_score}/4" for r in results],
+        "Monthly LPS":     ["✅" if r.monthly_lps_ok else "⬜" for r in results],
+        "Phase D-E":       ["✅" if r.monthly_phase_de else "⬜" for r in results],
+        "Mini Accum":      ["✅" if r.daily_mini_accum_ok else "⬜" for r in results],
+        "Daily LPS":       ["✅" if r.daily_lps_ok else "⬜" for r in results],
+        "Entry":           [r.entry_mode or "—" for r in results],
+        "LPS Days":        [r.lps_days or "—" for r in results],
+        pct_label:         [f"{abs(r.total_decline_pct or 0):.1f}%" for r in results],
+        "Volume":          [r.volume_trend or "—" for r in results],
+        "Price ($)":       [r.current_price for r in results],
     }
     st.dataframe(table_data, use_container_width=True, hide_index=True)
 
     st.divider()
-
     st.markdown("### 📊 Charts")
 
-    # נרות: לונג = ירוק/אדום קלאסי, שורט = כתום/אדום
+    # צבעי נרות
     if smode == "long":
-        candle_up   = "#16A34A"
-        candle_down = "#DC2626"
-        lps_fill    = "rgba(22,163,74,0.08)"
-        lps_line    = "rgba(22,163,74,0.5)"
-        lps_font    = "#16A34A"
+        candle_up, candle_down = "#16A34A", "#DC2626"
+        lps_fill = "rgba(22,163,74,0.08)"
+        lps_line = "rgba(22,163,74,0.5)"
+        lps_font = "#16A34A"
     else:
-        candle_up   = "#F97316"
-        candle_down = "#DC2626"
-        lps_fill    = "rgba(249,115,22,0.08)"
-        lps_line    = "rgba(249,115,22,0.5)"
-        lps_font    = "#F97316"
+        candle_up, candle_down = "#F97316", "#DC2626"
+        lps_fill = "rgba(249,115,22,0.08)"
+        lps_line = "rgba(249,115,22,0.5)"
+        lps_font = "#F97316"
 
     for result in results:
+        score_color = _score_color(result.checklist_score)
+        entry_str = f" · {result.entry_mode}" if result.entry_mode else ""
+        risk_str = ""
+        if smode == "long":
+            risk_str = f" · {_risk_badge(spy_analysis, 'long')}"
+
         label = (
-            f"📈  **{result.ticker}**"
-            f"  ·  {pname}: {result.lps_start_date} → {result.lps_end_date}"
-            f"  ·  {result.lps_days}d  ·  {abs(result.total_decline_pct)}%"
-            f"  ·  {result.volume_trend}  ·  ${result.current_price}"
+            f"{'📈' if smode == 'long' else '📉'}  **{result.ticker}**"
+            f"  ·  Score {result.checklist_score}/4"
+            f"{entry_str}"
+            f"{risk_str}"
+            f"  ·  ${result.current_price}"
         )
+
         with st.expander(label):
+            # ── Checklist items ──
+            st.markdown(_checklist_html(result), unsafe_allow_html=True)
+            st.markdown("")
+
             if result.ohlcv is None or result.ohlcv.empty:
                 st.warning("No chart data available.")
                 continue
@@ -460,15 +612,17 @@ elif results:
                 row=2, col=1,
             )
 
-            avg_vol_val = float(df["avg_volume"].iloc[-1])
-            fig.add_hline(
-                y=avg_vol_val,
-                line_dash="dot", line_color="#CCC",
-                annotation_text="avg vol",
-                annotation_font_color="#AAA",
-                annotation_position="bottom right",
-                row=2, col=1,
-            )
+            if "avg_volume" in df.columns:
+                avg_vol_val = float(df["avg_volume"].dropna().iloc[-1]) if not df["avg_volume"].dropna().empty else 0
+                if avg_vol_val > 0:
+                    fig.add_hline(
+                        y=avg_vol_val,
+                        line_dash="dot", line_color="#CCC",
+                        annotation_text="avg vol",
+                        annotation_font_color="#AAA",
+                        annotation_position="bottom right",
+                        row=2, col=1,
+                    )
 
             date_strs = [str(d.date()) for d in df.index]
             if result.lps_start_date in date_strs and result.lps_end_date in date_strs:
@@ -478,7 +632,7 @@ elif results:
                     fillcolor=lps_fill,
                     line_color=lps_line,
                     line_width=1,
-                    annotation_text=pname,
+                    annotation_text="LPS",
                     annotation_position="top left",
                     annotation_font_color=lps_font,
                     annotation_font_size=11,
@@ -486,7 +640,7 @@ elif results:
 
             fig.update_layout(
                 title=dict(
-                    text=f"<b>{result.ticker}</b>  —  {pname}",
+                    text=f"<b>{result.ticker}</b>  —  Score {result.checklist_score}/4",
                     font=dict(color="#1A1A1A", size=14),
                 ),
                 xaxis_rangeslider_visible=False,

@@ -1,5 +1,5 @@
 """
-daily_scan.py — סריקת LPS יומית ושליחת תוצאות לטלגרם.
+daily_scan.py — סריקת צ'קליסט לונג יומית ושליחת תוצאות לטלגרם.
 רץ ב-GitHub Actions כל יום לפני פתיחת שוק (08:00 ישראל).
 """
 from __future__ import annotations
@@ -25,21 +25,22 @@ def send_telegram(token: str, chat_id: str, message: str) -> None:
         print(f"Telegram error: {e}")
 
 
-def run_scan(preset_name: str, mode: str) -> list[str]:
-    """מריץ סריקה על פרסט נתון ומחזיר רשימת טיקרים."""
+def run_scan_both(preset_name: str) -> tuple[list[str], list[str]]:
+    """מריץ סריקה על פרסט נתון בשני מצבים ומחזיר (lps_plus, lps_minus)."""
     filters = config.PRESETS[preset_name]
     try:
-        tickers = screener.get_tickers(filters)   # ללא limit — כל מה שפינביז מחזיר
+        tickers = screener.get_tickers(filters)
     except screener.ScreenerError as e:
         print(f"Finviz error for {preset_name}: {e}")
-        return []
+        return [], []
 
-    found = []
+    plus_found, minus_found = [], []
     for ticker, _ in tickers:
-        result = analyzer.analyze(ticker, mode=mode)
-        if result.detected:
-            found.append(result.ticker)
-    return found
+        r_long  = analyzer.analyze(ticker, mode="long")
+        r_short = analyzer.analyze(ticker, mode="short")
+        if r_long.detected:  plus_found.append(ticker)
+        if r_short.detected: minus_found.append(ticker)
+    return sorted(plus_found), sorted(minus_found)
 
 
 def _send_long(token: str, chat_id: str, message: str) -> None:
@@ -54,15 +55,24 @@ def main() -> None:
     token   = os.environ["TELEGRAM_TOKEN"].strip()
     chat_id = os.environ["TELEGRAM_CHAT_ID"].strip()
 
-    # ── סריקות — כל פרסט בנפרד ──
-    annual_tickers = run_scan("📈 גבוה שנתי", mode="long")
-    cap_tickers    = run_scan("💰 Market Cap",  mode="long")
-    short_tickers  = run_scan("🔻 שורטים",     mode="short")
+    # ── ניתוח SPY לרמת סיכון ──
+    spy = analyzer.analyze_spy()
+    if spy.phase_b_reversal:
+        risk_label = "🟢 סיכון שלם (SPY פאזה B + היפוך)"
+    elif spy.lps_sellers_weakness:
+        risk_label = "🟡 חצי סיכון (SPY LPS — חולשת מוכרים)"
+    else:
+        risk_label = f"🔴 רבע סיכון (SPY RSI {spy.rsi_daily})"
 
-    total = len(set(annual_tickers + cap_tickers + short_tickers))
+    # ── סריקות — כל פרסט בשני מצבים ──
+    annual_plus,  annual_minus  = run_scan_both("📈 גבוה שנתי")
+    cap_plus,     cap_minus     = run_scan_both("💰 Market Cap")
+    short_plus,   short_minus   = run_scan_both("🔻 שורטים")
+
+    all_tickers = set(annual_plus + annual_minus + cap_plus + cap_minus + short_plus + short_minus)
+    total = len(all_tickers)
 
     def fmt_section(label: str, tickers: list[str]) -> str:
-        tickers = sorted(tickers)
         count = len(tickers)
         if count == 0:
             return f"{label} — 0 מניות: None"
@@ -70,12 +80,19 @@ def main() -> None:
 
     message = (
         "*Benja · LPS Scanner*\n"
+        f"{risk_label}\n"
         "\n"
-        f"{fmt_section('📈 גבוה שנתי', annual_tickers)}\n"
+        f"{fmt_section('📈 גבוה שנתי LPS+', annual_plus)}\n"
         "\n"
-        f"{fmt_section('💰 Market Cap', cap_tickers)}\n"
+        f"{fmt_section('📈 גבוה שנתי LPS-', annual_minus)}\n"
         "\n"
-        f"{fmt_section('🔻 LPSy Short', short_tickers)}\n"
+        f"{fmt_section('💰 Market Cap LPS+', cap_plus)}\n"
+        "\n"
+        f"{fmt_section('💰 Market Cap LPS-', cap_minus)}\n"
+        "\n"
+        f"{fmt_section('🔻 שורטים LPS+', short_plus)}\n"
+        "\n"
+        f"{fmt_section('🔻 שורטים LPS-', short_minus)}\n"
         "\n"
         f"✅ Total setups: {total}"
     )
