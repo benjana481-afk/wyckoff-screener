@@ -407,8 +407,8 @@ def analyze(ticker: str, mode: str = "long") -> ChecklistResult:
         bool(daily_lps_ok),
     ])
 
-    # ── זיהוי: חייב LPS יומי + עוד קריטריון אחד לפחות ──
-    detected = bool(daily_lps_ok) and score >= 2
+    # ── זיהוי: LPS יומי בלבד ──
+    detected = bool(daily_lps_ok)
 
     return ChecklistResult(
         ticker=ticker,
