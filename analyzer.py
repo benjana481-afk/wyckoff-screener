@@ -222,43 +222,47 @@ def _detect_daily_lps(df: pd.DataFrame, mode: str = "long") -> tuple[bool, Optio
         if end_pos < config.PULLBACK_MIN_DAYS - 1:
             break
 
-        count = 0
+        # ספור נרות קטנים רצופים לאחור מ-end_pos
+        max_count = 0
         for i in range(end_pos, -1, -1):
             row = df.iloc[i]
             if row["body"] < config.PULLBACK_BODY_THRESHOLD * row["avg_body"]:
-                count += 1
+                max_count += 1
             else:
                 break
 
-        if not (config.PULLBACK_MIN_DAYS <= count <= config.PULLBACK_MAX_DAYS):
+        if max_count < config.PULLBACK_MIN_DAYS:
             continue
 
-        lps_start_pos = end_pos - count + 1
+        # נסה כל אורך מ-MIN עד min(max_count, MAX) — מהקצר לארוך
+        for count in range(config.PULLBACK_MIN_DAYS, min(max_count, config.PULLBACK_MAX_DAYS) + 1):
+            lps_start_pos = end_pos - count + 1
 
-        has_spike = False
-        for i in range(lps_start_pos, end_pos + 1):
-            row = df.iloc[i]
-            move = abs(float(row["Close"]) - float(row["Open"])) / float(row["Open"])
-            if move > config.MAX_SINGLE_SPIKE:
-                has_spike = True
-                break
-        if has_spike:
-            continue
-
-        open_first = float(df.iloc[lps_start_pos]["Open"])
-        close_last = float(df.iloc[end_pos]["Close"])
-
-        if mode == "long":
-            if close_last > open_first * (1 + config.LPS_DIRECTION_TOLERANCE):
-                continue
-        else:
-            if close_last < open_first * (1 - config.LPS_DIRECTION_TOLERANCE):
+            # בדיקת spike
+            has_spike = False
+            for i in range(lps_start_pos, end_pos + 1):
+                row = df.iloc[i]
+                move = abs(float(row["Close"]) - float(row["Open"])) / float(row["Open"])
+                if move > config.MAX_SINGLE_SPIKE:
+                    has_spike = True
+                    break
+            if has_spike:
                 continue
 
-        decline_pct = round((open_first - close_last) / open_first * 100, 2)
-        start_date = str(df.index[lps_start_pos].date())
-        end_date = str(df.index[end_pos].date())
-        return True, start_date, end_date, count, decline_pct
+            open_first = float(df.iloc[lps_start_pos]["Open"])
+            close_last = float(df.iloc[end_pos]["Close"])
+
+            if mode == "long":
+                if close_last > open_first * (1 + config.LPS_DIRECTION_TOLERANCE):
+                    continue
+            else:
+                if close_last < open_first * (1 - config.LPS_DIRECTION_TOLERANCE):
+                    continue
+
+            decline_pct = round((open_first - close_last) / open_first * 100, 2)
+            start_date = str(df.index[lps_start_pos].date())
+            end_date = str(df.index[end_pos].date())
+            return True, start_date, end_date, count, decline_pct
 
     return False, None, None, 0, 0.0
 
@@ -351,7 +355,7 @@ def analyze(ticker: str, mode: str = "long") -> ChecklistResult:
     mode="short" → LPS הפוך (חולשת קונים), לסריקת שורטים.
     """
     # ── הורדת נתונים יומיים ──
-    df = _download(ticker, period="45d", interval="1d")
+    df = _download(ticker, period="70d", interval="1d")
     if df is None:
         return ChecklistResult(ticker=ticker, detected=False, error="No data returned by yfinance")
 
