@@ -372,20 +372,8 @@ def analyze(ticker: str, mode: str = "long") -> ChecklistResult:
         return ChecklistResult(ticker=ticker, detected=False, current_price=current_price,
                                error="Insufficient volatility (frozen stock)")
 
-    # ── סעיף 1+2: LPS חודשי + פאזה D-E ──
-    if mode == "long":
-        monthly_lps_ok, monthly_lps_months, monthly_phase_de = _detect_monthly_lps(ticker)
-    else:
-        monthly_lps_ok, monthly_lps_months, monthly_phase_de = False, 0, False
-
-    # ── סעיף 3: מיני-איסוף יומי ──
-    daily_mini_accum_ok, daily_accum_days = _detect_daily_mini_accum(df)
-
-    # ── סעיף 4: LPS יומי נוכחי ──
+    # ── LPS יומי בלבד ──
     daily_lps_ok, lps_start, lps_end, lps_days, decline_pct = _detect_daily_lps(df, mode=mode)
-
-    # ── סעיף 5: תזמון כניסה ──
-    entry_mode = _detect_entry_timing(df) if daily_lps_ok else None
 
     # ── Volume trend ──
     volume_trend = None
@@ -399,33 +387,17 @@ def analyze(ticker: str, mode: str = "long") -> ChecklistResult:
             avg_vol = float(avg_vol_v.iloc[-1]) if not avg_vol_v.empty else 0.0
             volume_trend = _volume_trend_label(vols, avg_vol)
 
-    # ── ציון ──
-    score = sum([
-        bool(monthly_lps_ok),
-        bool(monthly_phase_de),
-        bool(daily_mini_accum_ok),
-        bool(daily_lps_ok),
-    ])
-
-    # ── זיהוי: LPS יומי בלבד ──
     detected = bool(daily_lps_ok)
 
     return ChecklistResult(
         ticker=ticker,
         detected=detected,
-        monthly_lps_ok=monthly_lps_ok,
-        monthly_lps_months=monthly_lps_months,
-        monthly_phase_de=monthly_phase_de,
-        daily_mini_accum_ok=daily_mini_accum_ok,
-        daily_accum_days=daily_accum_days,
         daily_lps_ok=daily_lps_ok,
         lps_start_date=lps_start,
         lps_end_date=lps_end,
         lps_days=lps_days,
         total_decline_pct=decline_pct,
         volume_trend=volume_trend,
-        entry_mode=entry_mode,
-        checklist_score=score,
         current_price=round(current_price, 2),
         ohlcv=df,
     )

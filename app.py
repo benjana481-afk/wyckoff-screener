@@ -312,16 +312,6 @@ if run_btn:
     scan_mode = "long"
     pattern_name = "LPS"
 
-    # ── ניתוח SPY (פעם אחת בלבד) ──
-    spy_analysis: SpyAnalysis
-    if scan_mode == "long":
-        with st.spinner("Analyzing SPY market conditions..."):
-            spy_analysis = analyzer.analyze_spy()
-        st.session_state["spy_analysis"] = spy_analysis
-    else:
-        spy_analysis = SpyAnalysis()
-        st.session_state["spy_analysis"] = spy_analysis
-
     # ── שליפת טיקרים מ-Finviz ──
     with st.spinner("Fetching tickers from Finviz..."):
         try:
@@ -377,63 +367,12 @@ results: list[ChecklistResult] = st.session_state.get("results", [])
 scan_info: dict = st.session_state.get("scan_info", {})
 spy_analysis: SpyAnalysis = st.session_state.get("spy_analysis", SpyAnalysis())
 
-# ── SPY Risk Banner ──
-if scan_info and scan_info.get("scan_mode") == "long":
-    risk_badge = _risk_badge(spy_analysis, "long")
-    risk_color = _risk_color(spy_analysis, "long")
-
-    spy_detail_parts = [f"RSI {spy_analysis.rsi_daily}"]
-    if spy_analysis.phase_b_reversal:
-        spy_detail_parts.append("היפוך בתמיכה (פאזה B)")
-    elif spy_analysis.lps_sellers_weakness:
-        spy_detail_parts.append("LPS — חולשת מוכרים")
-    else:
-        spy_detail_parts.append("SPY לא במצב אידיאלי")
-    if spy_analysis.monthly_lps_ok:
-        spy_detail_parts.append("LPS חודשי ✓")
-
-    spy_detail = " · ".join(spy_detail_parts)
-
-    st.markdown(f"""
-    <div style="
-        background: #FFFFFF;
-        border: 1px solid #EDE8E0;
-        border-left: 4px solid {risk_color};
-        border-radius: 8px;
-        padding: 0.9rem 1.3rem;
-        margin-bottom: 1.5rem;
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-    ">
-        <div>
-            <div style="font-size:0.68rem; color:#AAA; letter-spacing:0.1em;
-                        text-transform:uppercase; margin-bottom:0.2rem;">
-                SPY Market Conditions
-            </div>
-            <div style="font-size:1.1rem; font-weight:700; color:{risk_color};">
-                {risk_badge}
-            </div>
-        </div>
-        <div style="margin-left:auto; font-size:0.82rem; color:#777;">
-            {spy_detail}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
 # ── Metrics ──
 if scan_info:
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3 = st.columns(3)
     col1.metric("Tickers Scanned", scan_info.get("total", 0))
     col2.metric("Setups Found", scan_info.get("detected", 0))
-
-    if results:
-        with_entry = sum(1 for r in results if r.entry_mode)
-        col3.metric("Entry Today", with_entry)
-    else:
-        col3.metric("Entry Today", 0)
-
-    col4.metric("Errors", len(scan_info.get("errors", [])))
+    col3.metric("Errors", len(scan_info.get("errors", [])))
 
     if scan_info.get("errors"):
         with st.expander(f"Errors ({len(scan_info['errors'])})"):
@@ -505,19 +444,12 @@ elif results:
     """, unsafe_allow_html=True)
 
     # ── Summary table ──
-    pct_label = "Rise %" if pname == "LPSy" else "Decline %"
     table_data = {
-        "Ticker":          [r.ticker for r in results],
-        "Score":           [f"{r.checklist_score}/4" for r in results],
-        "Monthly LPS":     ["✅" if r.monthly_lps_ok else "⬜" for r in results],
-        "Phase D-E":       ["✅" if r.monthly_phase_de else "⬜" for r in results],
-        "Mini Accum":      ["✅" if r.daily_mini_accum_ok else "⬜" for r in results],
-        "Daily LPS":       ["✅" if r.daily_lps_ok else "⬜" for r in results],
-        "Entry":           [r.entry_mode or "—" for r in results],
-        "LPS Days":        [r.lps_days or "—" for r in results],
-        pct_label:         [f"{abs(r.total_decline_pct or 0):.1f}%" for r in results],
-        "Volume":          [r.volume_trend or "—" for r in results],
-        "Price ($)":       [r.current_price for r in results],
+        "Ticker":      [r.ticker for r in results],
+        "LPS Days":    [r.lps_days or "—" for r in results],
+        "Decline %":   [f"{abs(r.total_decline_pct or 0):.1f}%" for r in results],
+        "Volume":      [r.volume_trend or "—" for r in results],
+        "Price ($)":   [r.current_price for r in results],
     }
     st.dataframe(table_data, use_container_width=True, hide_index=True)
 
@@ -537,25 +469,14 @@ elif results:
         lps_font = "#F97316"
 
     for result in results:
-        score_color = _score_color(result.checklist_score)
-        entry_str = f" · {result.entry_mode}" if result.entry_mode else ""
-        risk_str = ""
-        if smode == "long":
-            risk_str = f" · {_risk_badge(spy_analysis, 'long')}"
-
         label = (
-            f"{'📈' if smode == 'long' else '📉'}  **{result.ticker}**"
-            f"  ·  Score {result.checklist_score}/4"
-            f"{entry_str}"
-            f"{risk_str}"
+            f"📈  **{result.ticker}**"
+            f"  ·  {result.lps_days} days"
+            f"  ·  {abs(result.total_decline_pct or 0):.1f}% decline"
             f"  ·  ${result.current_price}"
         )
 
         with st.expander(label):
-            # ── Checklist items ──
-            st.markdown(_checklist_html(result), unsafe_allow_html=True)
-            st.markdown("")
-
             if result.ohlcv is None or result.ohlcv.empty:
                 st.warning("No chart data available.")
                 continue
