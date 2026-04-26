@@ -351,7 +351,7 @@ def analyze(ticker: str, mode: str = "long") -> ChecklistResult:
     mode="short" → LPS הפוך (חולשת קונים), לסריקת שורטים.
     """
     # ── הורדת נתונים יומיים ──
-    df = _download(ticker, period="30d", interval="1d")
+    df = _download(ticker, period="45d", interval="1d")
     if df is None:
         return ChecklistResult(ticker=ticker, detected=False, error="No data returned by yfinance")
 
