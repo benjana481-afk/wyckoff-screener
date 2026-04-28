@@ -238,22 +238,15 @@ def _detect_daily_lps(df: pd.DataFrame, mode: str = "long") -> tuple[bool, Optio
         for count in range(config.PULLBACK_MIN_DAYS, min(max_count, config.PULLBACK_MAX_DAYS) + 1):
             lps_start_pos = end_pos - count + 1
 
-            # בדיקת spike + כיוון כל נר (חייב יורד או שטוח)
+            # בדיקת spike
             has_spike = False
-            candle_ok = True
             for i in range(lps_start_pos, end_pos + 1):
                 row = df.iloc[i]
                 move = abs(float(row["Close"]) - float(row["Open"])) / float(row["Open"])
                 if move > config.MAX_SINGLE_SPIKE:
                     has_spike = True
                     break
-                if mode == "long" and float(row["Close"]) > float(row["Open"]):
-                    candle_ok = False
-                    break
-                if mode == "short" and float(row["Close"]) < float(row["Open"]):
-                    candle_ok = False
-                    break
-            if has_spike or not candle_ok:
+            if has_spike:
                 continue
 
             open_first = float(df.iloc[lps_start_pos]["Open"])
