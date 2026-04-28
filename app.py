@@ -330,7 +330,7 @@ if run_btn:
     for i, (ticker, _) in enumerate(tickers):
         status_text.text(f"Analyzing {ticker}  ({i + 1} / {len(tickers)})")
         result = analyzer.analyze(ticker, mode=scan_mode)
-        if result.error and "volatility" not in result.error and "Insufficient data" not in result.error:
+        if result.error and "volatility" not in result.error and "Insufficient data" not in result.error and "No data" not in result.error:
             errors.append(f"{ticker}: {result.error}")
         elif result.detected:
             results.append(result)
