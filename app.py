@@ -309,8 +309,8 @@ if run_btn:
     config.PULLBACK_MIN_DAYS = pb_min
     config.PULLBACK_MAX_DAYS = pb_max
 
-    scan_mode = "long"
-    pattern_name = "LPS"
+    scan_mode = "short" if active_preset == "🔻 שורטים" else "long"
+    pattern_name = "LPS-" if scan_mode == "short" else "LPS+"
 
     # ── שליפת טיקרים מ-Finviz ──
     with st.spinner("Fetching tickers from Finviz..."):

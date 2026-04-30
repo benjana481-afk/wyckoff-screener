@@ -26,7 +26,7 @@ def send_telegram(token: str, chat_id: str, message: str) -> None:
         message = message[MAX_LEN:]
 
 
-def run_scan(preset_name: str) -> list[str]:
+def run_scan(preset_name: str, mode: str = "long") -> list[str]:
     filters = config.PRESETS[preset_name]
     try:
         tickers = screener.get_tickers(filters)
@@ -36,7 +36,7 @@ def run_scan(preset_name: str) -> list[str]:
 
     found = []
     for ticker, _ in tickers:
-        r = analyzer.analyze(ticker, mode="long")
+        r = analyzer.analyze(ticker, mode=mode)
         if r.detected:
             found.append(ticker)
     return sorted(found)
@@ -46,9 +46,9 @@ def main() -> None:
     token   = os.environ["TELEGRAM_TOKEN"].strip()
     chat_id = os.environ["TELEGRAM_CHAT_ID"].strip()
 
-    annual = run_scan("📈 גבוה שנתי")
-    cap    = run_scan("💰 Market Cap")
-    short  = run_scan("🔻 שורטים")
+    annual = run_scan("📈 גבוה שנתי", mode="long")
+    cap    = run_scan("💰 Market Cap", mode="long")
+    short  = run_scan("🔻 שורטים",    mode="short")
 
     all_tickers = set(annual + cap + short)
 
