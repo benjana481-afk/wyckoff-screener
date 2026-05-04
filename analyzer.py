@@ -251,13 +251,6 @@ def _detect_daily_lps(df: pd.DataFrame, mode: str = "long") -> tuple[bool, Optio
             open_first = float(df.iloc[lps_start_pos]["Open"])
             close_last = float(df.iloc[end_pos]["Close"])
 
-            if mode == "long":
-                if close_last > open_first * (1 + config.LPS_DIRECTION_TOLERANCE):
-                    continue
-            else:
-                if close_last < open_first * (1 - config.LPS_DIRECTION_TOLERANCE):
-                    continue
-
             decline_pct = round((open_first - close_last) / open_first * 100, 2)
             start_date = str(df.index[lps_start_pos].date())
             end_date = str(df.index[end_pos].date())
