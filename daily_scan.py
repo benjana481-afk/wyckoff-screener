@@ -46,11 +46,14 @@ def main() -> None:
     token   = os.environ["TELEGRAM_TOKEN"].strip()
     chat_id = os.environ["TELEGRAM_CHAT_ID"].strip()
 
-    annual = run_scan("📈 גבוה שנתי", mode="long")
-    cap    = run_scan("💰 Market Cap", mode="long")
-    short  = run_scan("🔻 שורטים",    mode="short")
+    annual_plus  = run_scan("📈 גבוה שנתי", mode="long")
+    annual_minus = run_scan("📈 גבוה שנתי", mode="short")
+    cap_plus     = run_scan("💰 Market Cap", mode="long")
+    cap_minus    = run_scan("💰 Market Cap", mode="short")
+    short_plus   = run_scan("🔻 שורטים",    mode="long")
+    short_minus  = run_scan("🔻 שורטים",    mode="short")
 
-    all_tickers = set(annual + cap + short)
+    all_tickers = set(annual_plus + annual_minus + cap_plus + cap_minus + short_plus + short_minus)
 
     def fmt(label: str, tickers: list[str]) -> str:
         if not tickers:
@@ -59,9 +62,12 @@ def main() -> None:
 
     message = (
         "*Benja · LPS Scanner*\n\n"
-        f"{fmt('📈 גבוה שנתי', annual)}\n\n"
-        f"{fmt('💰 Market Cap', cap)}\n\n"
-        f"{fmt('🔻 שורטים', short)}\n\n"
+        f"{fmt('📈 גבוה שנתי LPS+', annual_plus)}\n\n"
+        f"{fmt('📈 גבוה שנתי LPS-', annual_minus)}\n\n"
+        f"{fmt('💰 Market Cap LPS+', cap_plus)}\n\n"
+        f"{fmt('💰 Market Cap LPS-', cap_minus)}\n\n"
+        f"{fmt('🔻 שורטים LPS+', short_plus)}\n\n"
+        f"{fmt('🔻 שורטים LPS-', short_minus)}\n\n"
         f"✅ Total: {len(all_tickers)}"
     )
 
