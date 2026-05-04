@@ -222,13 +222,11 @@ def _detect_daily_lps(df: pd.DataFrame, mode: str = "long") -> tuple[bool, Optio
         if end_pos < config.PULLBACK_MIN_DAYS - 1:
             break
 
-        # ספור נרות קטנים רצופים לאחור מ-end_pos
+        # ספור נרות רצופים לאחור מ-end_pos (ללא בדיקת גוף)
         max_count = 0
         for i in range(end_pos, -1, -1):
-            row = df.iloc[i]
-            if row["body"] < config.PULLBACK_BODY_THRESHOLD * row["avg_body"]:
-                max_count += 1
-            else:
+            max_count += 1
+            if max_count >= config.PULLBACK_MAX_DAYS:
                 break
 
         if max_count < config.PULLBACK_MIN_DAYS:
