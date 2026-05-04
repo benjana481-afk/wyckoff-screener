@@ -210,12 +210,13 @@ with st.sidebar:
 
     st.markdown("### ⚙️ LPS Settings")
 
-    pb_min, pb_max = st.slider(
-        "Pullback Days (Daily LPS)",
+    pb_min = st.slider(
+        "Pullback Min Days (Daily LPS)",
         min_value=2, max_value=10,
-        value=(config.PULLBACK_MIN_DAYS, config.PULLBACK_MAX_DAYS),
-        help="מספר ימים רצופים של חולשה ביומי",
+        value=config.PULLBACK_MIN_DAYS,
+        help="מספר ימים מינימלי לרצף LPS",
     )
+    pb_max = 9999
 
     max_tickers = st.slider(
         "Tickers to Scan",

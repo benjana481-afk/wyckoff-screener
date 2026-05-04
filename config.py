@@ -32,7 +32,7 @@ ROLLING_BASELINE: int = 20       # ימים לחישוב ממוצע גוף / vol
 
 # ---- פרמטרים LPS יומי ----
 PULLBACK_MIN_DAYS: int = 3
-PULLBACK_MAX_DAYS: int = 7
+PULLBACK_MAX_DAYS: int = 9999
 PULLBACK_BODY_THRESHOLD: float = 1.0
 PULLBACK_RECENCY: int = 2
 LPS_DIRECTION_TOLERANCE: float = 0.02
