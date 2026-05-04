@@ -325,10 +325,7 @@ if run_btn:
     config.PULLBACK_MIN_DAYS = pb_min
     config.PULLBACK_MAX_DAYS = pb_max
 
-    if active_preset == "🔻 שורטים":
-        scan_mode = "short"
-    else:
-        scan_mode = "long" if st.session_state.get("lps_mode", "+") == "+" else "short"
+    scan_mode = "long" if st.session_state.get("lps_mode", "+") == "+" else "short"
     pattern_name = "LPS+" if scan_mode == "long" else "LPS-"
 
     # ── שליפת טיקרים מ-Finviz ──
