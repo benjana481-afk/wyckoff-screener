@@ -242,9 +242,16 @@ def _detect_daily_lps(df: pd.DataFrame, mode: str = "long") -> tuple[bool, Optio
                     has_spike = True
                     break
                 if i > lps_start_pos:
-                    if float(df.iloc[i]["Low"]) > float(df.iloc[i - 1]["Low"]):
-                        lows_ok = False
-                        break
+                    if mode == "long":
+                        # LPS+: Low יורד/שטוח
+                        if float(df.iloc[i]["Low"]) > float(df.iloc[i - 1]["Low"]):
+                            lows_ok = False
+                            break
+                    else:
+                        # LPS-: High עולה/שטוח
+                        if float(df.iloc[i]["High"]) < float(df.iloc[i - 1]["High"]):
+                            lows_ok = False
+                            break
             if has_spike or not lows_ok:
                 continue
 
