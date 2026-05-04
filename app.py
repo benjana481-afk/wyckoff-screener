@@ -200,6 +200,21 @@ with st.sidebar:
     active_preset = st.session_state["preset"]
     active_filters = config.PRESETS[active_preset]
 
+    st.markdown("**LPS Direction**")
+    if "lps_mode" not in st.session_state:
+        st.session_state["lps_mode"] = "+"
+    lps_col1, lps_col2 = st.columns(2)
+    with lps_col1:
+        if st.button("LPS +", use_container_width=True,
+                     type="primary" if st.session_state["lps_mode"] == "+" else "secondary"):
+            st.session_state["lps_mode"] = "+"
+            st.rerun()
+    with lps_col2:
+        if st.button("LPS −", use_container_width=True,
+                     type="primary" if st.session_state["lps_mode"] == "-" else "secondary"):
+            st.session_state["lps_mode"] = "-"
+            st.rerun()
+
     with st.expander("Active Filters", expanded=False):
         for k, v in active_filters.items():
             st.markdown(f"<small style='color:#AAA'>{k}</small><br>"
@@ -310,8 +325,11 @@ if run_btn:
     config.PULLBACK_MIN_DAYS = pb_min
     config.PULLBACK_MAX_DAYS = pb_max
 
-    scan_mode = "short" if active_preset == "🔻 שורטים" else "long"
-    pattern_name = "LPS-" if scan_mode == "short" else "LPS+"
+    if active_preset == "🔻 שורטים":
+        scan_mode = "short"
+    else:
+        scan_mode = "long" if st.session_state.get("lps_mode", "+") == "+" else "short"
+    pattern_name = "LPS+" if scan_mode == "long" else "LPS-"
 
     # ── שליפת טיקרים מ-Finviz ──
     with st.spinner("Fetching tickers from Finviz..."):
